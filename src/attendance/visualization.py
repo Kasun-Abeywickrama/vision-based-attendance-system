@@ -23,6 +23,8 @@ def create_student_summary(db_path: str | Path, index_no: str, output_dir: str |
     ax.set_ylim(bottom=0)
     fig.tight_layout();fig.savefig(p1,dpi=160);plt.close(fig)
 
+
+
     p2=output_dir/f"{index_no}_history.png"
     fig,ax=plt.subplots(figsize=(9,4))
     y=[1 if r['status']=='PRESENT' else (0 if r['status']=='ABSENT' else .5) for r in rows]
