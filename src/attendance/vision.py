@@ -127,3 +127,27 @@ class AttendanceVision:
             )
 
         ys = best[1]
+
+
+
+        paths = {}
+        if self.config.save_intermediate:
+            stages = {
+                "01_original.jpg": work,
+                "02_deskewed.jpg": deskewed,
+                "03_grayscale.jpg": gray,
+                "04_binary.jpg": binary,
+                "05_table_detection.jpg": table_overlay,
+                "06_results.jpg": overlay,
+            }
+            for name,img in stages.items():
+                p=output_dir/name;cv2.imwrite(str(p),img);paths[name]=str(p)
+
+        meta = {
+            "deskew_angle_degrees": angle,
+            "horizontal_boundaries": ys,
+            "signature_column": [x_left,x_right],
+            "intermediate_files": paths,
+        }
+        return results,meta
+        
