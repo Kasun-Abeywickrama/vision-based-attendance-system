@@ -147,3 +147,15 @@ def compute_cell_bounds(
         y_top + margin_y,
         y_bottom - margin_y,
     )
+
+
+def extract_signature_roi(
+    image: np.ndarray,
+    x_left: int,
+    x_right: int,
+    y_top: int,
+    y_bottom: int,
+) -> np.ndarray:
+    """Crop a single student's signature cell, excluding grid-line margins."""
+    xa, xb, ya, yb = compute_cell_bounds(x_left, x_right, y_top, y_bottom)
+    return image[ya:yb, xa:xb]
