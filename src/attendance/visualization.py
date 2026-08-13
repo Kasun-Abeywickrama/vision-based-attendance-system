@@ -3,6 +3,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from .database import AttendanceDatabase
 
+
 def create_student_summary(db_path: str | Path, index_no: str, output_dir: str | Path) -> list[Path]:
     db = AttendanceDatabase(db_path)
     rows = db.student_history(index_no)
