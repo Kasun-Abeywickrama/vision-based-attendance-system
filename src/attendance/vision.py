@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -159,3 +160,43 @@ def extract_signature_roi(
     """Crop a single student's signature cell, excluding grid-line margins."""
     xa, xb, ya, yb = compute_cell_bounds(x_left, x_right, y_top, y_bottom)
     return image[ya:yb, xa:xb]
+
+
+def save_signature_roi(
+    roi: np.ndarray,
+    output_dir: str | Path,
+    row_index: int,
+    student_index: str,
+) -> Path:
+    """Save a cropped signature ROI as row_<n>_<student index>.png."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    roi_path = output_dir / f"row_{row_index}_{student_index}.png"
+    cv2.imwrite(str(roi_path), roi)
+    return roi_path
+
+
+def extract_signature_rois(
+    image: np.ndarray,
+    row_boundaries: list[int],
+    x_left: int,
+    x_right: int,
+    student_indices: list[str],
+    output_dir: str | Path,
+) -> list[Path]:
+    """Crop and save one signature ROI per student row.
+
+    ``row_boundaries`` holds one more entry than ``student_indices``: student
+    row ``i`` spans ``row_boundaries[i]`` to ``row_boundaries[i + 1]``.
+    """
+    if len(row_boundaries) != len(student_indices) + 1:
+        raise ValueError("row_boundaries must contain one more entry than student_indices")
+
+    roi_paths = []
+    for row, student_index in enumerate(student_indices):
+        y_top, y_bottom = row_boundaries[row], row_boundaries[row + 1]
+        roi = extract_signature_roi(image, x_left, x_right, y_top, y_bottom)
+        roi_paths.append(save_signature_roi(roi, output_dir, row + 1, student_index))
+
+    return roi_paths
