@@ -127,28 +127,23 @@ class AttendanceVision:
             )
 
         ys = best[1]
-        
-        y0,y1 = ys[0],ys[-1]
 
-        table_strip = binary[y0:y1+1, x_offset:int(0.90*w)]
-        
-        vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT,(1,max(15,int((y1-y0)*0.55))))
-        
-        vertical = cv2.morphologyEx(table_strip,cv2.MORPH_OPEN,vertical_kernel)
-        
-        x_counts = (vertical>0).sum(axis=0)
-        
-        raw_x = np.where(x_counts > int((y1-y0)*0.42))[0].tolist()
-        
-        x_candidates = [x+x_offset for x in _cluster(raw_x,4)]
-        
-        if len(x_candidates) < 2:
-            raise SheetDetectionError(f"Could not locate signature column. Vertical candidates={x_candidates}")
 
-        # Last two table boundaries define the signature column.
-        x_left,x_right = sorted(x_candidates)[-2:]
-        
-        if x_right-x_left < 50:
-            raise SheetDetectionError(f"Signature column too narrow: {x_left}..{x_right}")
-            
-        return ys,(x_left,x_right),gray,binary
+def compute_cell_bounds(
+    x_left: int,
+    x_right: int,
+    y_top: int,
+    y_bottom: int,
+    margin_x_ratio: float = 0.07,
+    margin_y_ratio: float = 0.18,
+) -> tuple[int, int, int, int]:
+    """Shrink a raw table cell inward so grid-line ink is excluded."""
+    margin_x = max(4, int((x_right - x_left) * margin_x_ratio))
+    margin_y = max(3, int((y_bottom - y_top) * margin_y_ratio))
+
+    return (
+        x_left + margin_x,
+        x_right - margin_x,
+        y_top + margin_y,
+        y_bottom - margin_y,
+    )
