@@ -74,68 +74,24 @@ class AttendanceVision:
     ):
         self.config = config or VisionConfig()
 
-    def _deskew(
-        self,
-        image: np.ndarray
-    ) -> tuple[np.ndarray, float]:
-        h, w = image.shape[:2]
-
-        gray = cv2.cvtColor(
-            image,
-            cv2.COLOR_BGR2GRAY
-        )
-
-        roi = gray[
-            int(0.20 * h):int(0.60 * h),
-            int(0.04 * w):int(0.90 * w)
-        ]
-
-        edges = cv2.Canny(
-            roi,
-            40,
-            120
-        )
-
-        lines = cv2.HoughLinesP(
-            edges,
-            1,
-            np.pi / 360,
-            threshold=80,
-            minLineLength=max(
-                100,
-                int(0.22 * w)
-            ),
-            maxLineGap=30,
-        )
-
-        angles: list[float] = []
-
-        if lines is not None:
-            for x1, y1, x2, y2 in np.asarray(
-                lines
-            ).reshape(-1, 4):
-
-                angle = math.degrees(
-                    math.atan2(
-                        y2 - y1,
-                        x2 - x1
-                    )
-                )
-
-                if abs(angle) < 10:
-                    angles.append(angle)
-
-        angle = (
-            float(np.median(angles))
-            if angles
-            else 0.0
-        )
-
-        return _rotate_same_size(
-            image,
-            angle
-        ), angle
-
+    def _deskew(self, image: np.ndarray) -> tuple[np.ndarray, float]:
+            h, w = image.shape[:2]
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            roi = gray[int(0.20*h):int(0.60*h), int(0.04*w):int(0.90*w)]
+            edges = cv2.Canny(roi, 40, 120)
+            lines = cv2.HoughLinesP(
+                edges, 1, np.pi/360, threshold=80,
+                minLineLength=max(100, int(0.22*w)), maxLineGap=30,
+            )
+            angles: list[float] = []
+            if lines is not None:
+                for x1, y1, x2, y2 in np.asarray(lines).reshape(-1, 4):
+                    angle = math.degrees(math.atan2(y2-y1, x2-x1))
+                    if abs(angle) < 10:
+                        angles.append(angle)
+            angle = float(np.median(angles)) if angles else 0.0
+            return _rotate_same_size(image, angle), angle
+    
     def _find_table(
         self,
         image: np.ndarray,
@@ -618,119 +574,50 @@ class AttendanceVision:
             # Attendance classification
             # ----------------------------------------------------
             
-            threshold = self.config.presence_ink_ratio
-            band = self.config.uncertain_band
-            if ink_ratio >= threshold + band:
-                status = "PRESENT"
-            elif ink_ratio <= max(0.0,threshold-band):
-                status = "ABSENT"
-            else:
-                status = "UNCERTAIN"
-            distance = abs(ink_ratio-threshold)/(band if band>0 else threshold)
-            confidence = float(min(0.99,0.55+0.11*distance))
+        return ys,(x_left,x_right),gray,binary
 
-            # Save the extracted signature ROI.
-            roi_path = (
-                roi_dir
-                / f"row_{row + 1}_"
-                  f"{student.index}.png"
-            )
+    def process(self, image_path: str | Path, students: list[Student], output_dir: str | Path) -> tuple[list[DetectionResult], dict]:
+        image_path = Path(image_path)
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True,exist_ok=True)
+        raw = cv2.imread(str(image_path))
+        if raw is None:
+            raise ValueError(f"Unable to read image: {image_path}")
 
-            cv2.imwrite(
-                str(roi_path),
-                roi
-            )
+        h0,w0 = raw.shape[:2]
+        scale = self.config.work_width / w0
+        work = cv2.resize(raw,(self.config.work_width,int(h0*scale)),interpolation=cv2.INTER_AREA)
+        deskewed, angle = self._deskew(work)
+        deskewed, angle = self._deskew(work)
 
-            # Store the classification result.
-            results.append(
-                DetectionResult(
-                    row + 1,
-                    student,
-                    status,
-                    confidence,
-                    ink_ratio,
-                    color_ratio,
-                    roi_path
-                )
-            )
-
-            # ----------------------------------------------------
-            # Visualization
-            # ----------------------------------------------------
-            box_color = (
-                (0, 180, 0)
-                if status == "PRESENT"
-                else (
-                    (0, 0, 220)
-                    if status == "ABSENT"
-                    else (0, 165, 255)
-                )
-            )
-
-            cv2.rectangle(
-                overlay,
-                (x_left, ya),
-                (x_right, yb),
-                box_color,
-                3
-            )
-
-            cv2.putText(
-                overlay,
-                (
-                    f"{student.index}: "
-                    f"{status} "
-                    f"{confidence:.0%}"
-                ),
-                (
-                    x_right + 10,
-                    (ya + yb) // 2
-                ),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.45,
-                box_color,
-                1,
-                cv2.LINE_AA
-            )
-
-        # --------------------------------------------------------
-        # Save intermediate processing stages
-        # --------------------------------------------------------
         paths = {}
-
         if self.config.save_intermediate:
-            stages = {
-                "01_original.jpg": work,
-                "02_deskewed.jpg": deskewed,
-                "03_grayscale.jpg": gray,
-                "04_binary.jpg": binary,
-                "05_table_detection.jpg":
-                    table_overlay,
-                "06_results.jpg": overlay,
-            }
+                    stages = {
+                        "01_original.jpg": work,
+                        "02_deskewed.jpg": deskewed,
+                        "03_grayscale.jpg": gray,
+                        "04_binary.jpg": binary,
+                        "05_table_detection.jpg": table_overlay,
+                        "06_results.jpg": overlay,
+                    }
+                    for name,img in stages.items():
+                        p=output_dir/name;cv2.imwrite(str(p),img);paths[name]=str(p)
 
-            for name, img in stages.items():
-                p = (
-                    output_dir / name
-                )
+def compute_cell_bounds(
+    x_left: int,
+    x_right: int,
+    y_top: int,
+    y_bottom: int,
+    margin_x_ratio: float = 0.07,
+    margin_y_ratio: float = 0.18,
+) -> tuple[int, int, int, int]:
+    """Shrink a raw table cell inward so grid-line ink is excluded."""
+    margin_x = max(4, int((x_right - x_left) * margin_x_ratio))
+    margin_y = max(3, int((y_bottom - y_top) * margin_y_ratio))
 
-                cv2.imwrite(
-                    str(p),
-                    img
-                )
-
-                paths[name] = str(p)
-
-        meta = {
-            "deskew_angle_degrees": angle,
-            "horizontal_boundaries": ys,
-            "signature_column": [
-                x_left,
-                x_right
-            ],
-            "intermediate_files": paths,
-        }
-
-        return results, meta
-
-
+    return (
+        x_left + margin_x,
+        x_right - margin_x,
+        y_top + margin_y,
+        y_bottom - margin_y,
+    )
