@@ -127,3 +127,23 @@ class AttendanceVision:
             )
 
         ys = best[1]
+
+
+def compute_cell_bounds(
+    x_left: int,
+    x_right: int,
+    y_top: int,
+    y_bottom: int,
+    margin_x_ratio: float = 0.07,
+    margin_y_ratio: float = 0.18,
+) -> tuple[int, int, int, int]:
+    """Shrink a raw table cell inward so grid-line ink is excluded."""
+    margin_x = max(4, int((x_right - x_left) * margin_x_ratio))
+    margin_y = max(3, int((y_bottom - y_top) * margin_y_ratio))
+
+    return (
+        x_left + margin_x,
+        x_right - margin_x,
+        y_top + margin_y,
+        y_bottom - margin_y,
+    )
