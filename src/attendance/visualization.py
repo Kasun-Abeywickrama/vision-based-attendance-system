@@ -13,7 +13,6 @@ def create_student_summary(db_path: str | Path, index_no: str, output_dir: str |
     absent=sum(r['status']=='ABSENT' for r in rows)
     uncertain=len(rows)-present-absent
 
-
     p1=output_dir/f"{index_no}_summary.png"
     fig,ax=plt.subplots(figsize=(7,4))
     labels=['Present','Absent','Uncertain']; values=[present,absent,uncertain]
@@ -22,8 +21,6 @@ def create_student_summary(db_path: str | Path, index_no: str, output_dir: str |
     ax.set_title(f'Attendance summary — {index_no}')
     ax.set_ylim(bottom=0)
     fig.tight_layout();fig.savefig(p1,dpi=160);plt.close(fig)
-
-
 
     p2=output_dir/f"{index_no}_history.png"
     fig,ax=plt.subplots(figsize=(9,4))
