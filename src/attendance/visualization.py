@@ -3,7 +3,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from .database import AttendanceDatabase
 
-
 def create_student_summary(db_path: str | Path, index_no: str, output_dir: str | Path) -> list[Path]:
     db = AttendanceDatabase(db_path)
     rows = db.student_history(index_no)
@@ -13,6 +12,7 @@ def create_student_summary(db_path: str | Path, index_no: str, output_dir: str |
     present=sum(r['status']=='PRESENT' for r in rows)
     absent=sum(r['status']=='ABSENT' for r in rows)
     uncertain=len(rows)-present-absent
+
 
     p1=output_dir/f"{index_no}_summary.png"
     fig,ax=plt.subplots(figsize=(7,4))
