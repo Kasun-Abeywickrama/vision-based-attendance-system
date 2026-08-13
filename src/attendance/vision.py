@@ -39,6 +39,24 @@ class AttendanceVision:
     def __init__(self, config: VisionConfig | None = None):
         self.config = config or VisionConfig()
 
+    def _deskew(self, image: np.ndarray) -> tuple[np.ndarray, float]:
+            h, w = image.shape[:2]
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            roi = gray[int(0.20*h):int(0.60*h), int(0.04*w):int(0.90*w)]
+            edges = cv2.Canny(roi, 40, 120)
+            lines = cv2.HoughLinesP(
+                edges, 1, np.pi/360, threshold=80,
+                minLineLength=max(100, int(0.22*w)), maxLineGap=30,
+            )
+            angles: list[float] = []
+            if lines is not None:
+                for x1, y1, x2, y2 in np.asarray(lines).reshape(-1, 4):
+                    angle = math.degrees(math.atan2(y2-y1, x2-x1))
+                    if abs(angle) < 10:
+                        angles.append(angle)
+            angle = float(np.median(angles)) if angles else 0.0
+            return _rotate_same_size(image, angle), angle
+    
     def _find_table(
         self,
         image: np.ndarray,
@@ -152,6 +170,33 @@ class AttendanceVision:
             raise SheetDetectionError(f"Signature column too narrow: {x_left}..{x_right}")
             
         return ys,(x_left,x_right),gray,binary
+
+    def process(self, image_path: str | Path, students: list[Student], output_dir: str | Path) -> tuple[list[DetectionResult], dict]:
+        image_path = Path(image_path)
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True,exist_ok=True)
+        raw = cv2.imread(str(image_path))
+        if raw is None:
+            raise ValueError(f"Unable to read image: {image_path}")
+
+        h0,w0 = raw.shape[:2]
+        scale = self.config.work_width / w0
+        work = cv2.resize(raw,(self.config.work_width,int(h0*scale)),interpolation=cv2.INTER_AREA)
+        deskewed, angle = self._deskew(work)
+        deskewed, angle = self._deskew(work)
+
+        paths = {}
+        if self.config.save_intermediate:
+                    stages = {
+                        "01_original.jpg": work,
+                        "02_deskewed.jpg": deskewed,
+                        "03_grayscale.jpg": gray,
+                        "04_binary.jpg": binary,
+                        "05_table_detection.jpg": table_overlay,
+                        "06_results.jpg": overlay,
+                    }
+                    for name,img in stages.items():
+                        p=output_dir/name;cv2.imwrite(str(p),img);paths[name]=str(p)
 
 def compute_cell_bounds(
     x_left: int,
